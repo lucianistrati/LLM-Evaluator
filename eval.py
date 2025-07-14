@@ -1,11 +1,12 @@
 import openai
 from langsmith.wrappers import wrap_openai
-from langsmith import traceable
+from langsmith import traceable, Client
+from langsmith.evaluation import evaluate
 
 # Auto-trace LLM calls in-context
 client = wrap_openai(openai.Client())
 
-@traceable # Auto-trace this function
+@traceable
 def pipeline(user_input: str):
     result = client.chat.completions.create(
         messages=[{"role": "user", "content": user_input}],
@@ -14,39 +15,36 @@ def pipeline(user_input: str):
     return result.choices[0].message.content
 
 pipeline("Hello, world!")
-# Out:  Hello there! How can I assist you today?
-
-from langsmith import Client
-from langsmith.evaluation import evaluate
 
 client = Client()
 
-# Define dataset: these are your test cases
+# Create a sample dataset
 dataset_name = "Sample Dataset"
 dataset = client.create_dataset(dataset_name, description="A sample dataset in LangSmith.")
 client.create_examples(
-  inputs=[
-      {"postfix": "to LangSmith"},
-      {"postfix": "to Evaluations in LangSmith"},
-  ],
-  outputs=[
-      {"output": "Welcome to LangSmith"},
-      {"output": "Welcome to Evaluations in LangSmith"},
-  ],
-  dataset_id=dataset.id,
+    inputs=[
+        {"postfix": "to LangSmith"},
+        {"postfix": "to Evaluations in LangSmith"},
+    ],
+    outputs=[
+        {"output": "Welcome to LangSmith"},
+        {"output": "Welcome to Evaluations in LangSmith"},
+    ],
+    dataset_id=dataset.id,
 )
 
-# Define your evaluator
+# Define an exact match evaluator
 def exact_match(run, example):
-  return {"score": run.outputs["output"] == example.outputs["output"]}
+    return {"score": run.outputs["output"] == example.outputs["output"]}
 
+# Evaluate using a simple function for testing
 experiment_results = evaluate(
-  lambda input: "Welcome " + input['postfix'], # Your AI system goes here
-  data=dataset_name, # The data to predict and grade over
-  evaluators=[exact_match], # The evaluators to score the results
-  experiment_prefix="sample-experiment", # The name of the experiment
-  metadata={
-    "version": "1.0.0",
-    "revision_id": "beta"
-  },
+    lambda input: {"output": "Welcome " + input['postfix']},
+    data=dataset_name,
+    evaluators=[exact_match],
+    experiment_prefix="sample-experiment",
+    metadata={
+        "version": "1.0.0",
+        "revision_id": "beta"
+    },
 )
